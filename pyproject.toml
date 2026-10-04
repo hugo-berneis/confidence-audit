@@ -1,0 +1,42 @@
+[project]
+name = "confidence-audit"
+version = "0.1.0"
+description = "Finance calibration harness: runs Jev and an LLM on labeled finance classification tasks and measures accuracy, calibration, and coverage."
+readme = "README.md"
+authors = [
+    { name = "HBerneis", email = "166192025+hugo-berneis@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=1.9.0",
+    "matplotlib>=3.10.0",
+    "numpy>=2.3.0",
+    "pandas>=2.3.0",
+    "pydantic-settings>=2.15.0",
+    "python-dotenv>=1.2.3",
+    "scikit-learn>=1.7.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.15,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "harness"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
