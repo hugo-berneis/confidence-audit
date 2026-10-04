@@ -36,3 +36,12 @@ def test_rewriting_a_key_keeps_latest_value(tmp_path: Path) -> None:
     cache.put("task", "model", "example-1", {"label": "B"})
     assert cache.get("task", "model", "example-1")["label"] == "B"
     assert len(PredictionCache(path)) == 1
+
+
+def test_entries_for_task_filters_by_task(tmp_path: Path) -> None:
+    cache = PredictionCache(tmp_path / "predictions.jsonl")
+    cache.put("task-a", "model", "example-1", {"label": "A"})
+    cache.put("task-b", "model", "example-2", {"label": "B"})
+    entries = cache.entries_for_task("task-a")
+    assert len(entries) == 1
+    assert entries[0]["example_id"] == "example-1"

@@ -37,6 +37,9 @@ class PredictionCache:
         with self.path.open("a") as f:
             f.write(json.dumps(full_record) + "\n")
 
+    def entries_for_task(self, task: str) -> list[dict[str, Any]]:
+        return [record for record in self._entries.values() if record["task"] == task]
+
     def __len__(self) -> int:
         return len(self._entries)
 

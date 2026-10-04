@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # Confirmed with Hugo: hold out these two tickers entirely for the OOD split.
     risk_topic_ood_tickers: tuple[str, ...] = ("PFE", "V")
 
+    # Phase 4 threshold targets, tuned on the tune split only (see thresholds/select.py).
+    target_coverage: float = 0.8
+    target_error_rate: float = 0.1
+
 
 @lru_cache
 def get_settings() -> Settings:
