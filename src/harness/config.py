@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     jev_model: str = "jev-latest"
 
     cache_dir: str = "runs/cache"
+    seed: int = 0
+
+    # Project 1's raw paragraphs, read-only -- confidence-audit never writes here.
+    risk_topic_paragraphs_path: str = "../10k-analyst/data/processed/paragraphs.jsonl"
+    risk_topic_gold_path: str = "data/gold/risk_topic_sample.jsonl"
+    # Confirmed with Hugo: hold out these two tickers entirely for the OOD split.
+    risk_topic_ood_tickers: tuple[str, ...] = ("PFE", "V")
 
 
 @lru_cache
