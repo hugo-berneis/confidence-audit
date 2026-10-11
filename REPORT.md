@@ -1,10 +1,10 @@
 # confidence-audit: a finance calibration harness
 
 **Status: pipeline validated on mocks. No real-model results yet.** Everything
-below is real output from this repo, reproducible by anyone who clones it —
+below is real output from this repo, reproducible by anyone who clones it,
 but it validates that the harness runs end-to-end correctly, not that Jev or
-the LLM are well-calibrated. See [Pending real runs](#pending-real-runs) for
-exactly what's missing and why.
+the LLM are well-calibrated. See [Limitations](#limitations) for exactly
+what's missing and why.
 
 ## The question
 
@@ -16,9 +16,9 @@ classification tasks:
 
 1. How accurate is each model?
 2. How well does its stated confidence track its actual correctness
-   (calibration — ECE, and a reliability diagram)?
+   (calibration: ECE, and a reliability diagram)?
 3. How well does confidence separate right answers from wrong ones
-   (discrimination — AUROC)?
+   (discrimination: AUROC)?
 4. If you only answer the fraction of cases you're most confident about, how
    much more accurate do you get (accuracy at coverage)?
 5. Do thresholds tuned on one slice of data still hold up on a slice the
@@ -31,16 +31,16 @@ classification tasks:
 Paragraphs from Project 1's SEC 10-K filings (`risk_factors` and `mdna`
 sections, 6 companies: AAPL, KO, MSFT, PFE, V, WMT), classified into one of
 11 topics (`liquidity`, `credit`, `regulatory`, `cyber`, `macro`,
-`competition`, `operations`, `legal`, `supply_chain`, `labor`, `other` — the
+`competition`, `operations`, `legal`, `supply_chain`, `labor`, `other`: the
 same set Jev is restricted to in Project 1, from its
 `config/topics.yaml`).
 
 **Gold labels:** Project 1's own tagger output
-(`exports/paragraph_labels.jsonl`) could not be used — it's Jev's own tags
+(`exports/paragraph_labels.jsonl`) could not be used. It's Jev's own tags
 (every row has `topic_confidence == 0.6`, the real Jev client's constant
 return on that run), and evaluating Jev against its own tags would be
 circular. Instead, `scripts/prepare_10k_gold_sample.py` drew a 131-row
-stratified sample (by ticker × section) from Project 1's *raw, untagged*
+stratified sample (by ticker x section) from Project 1's *raw, untagged*
 paragraphs into `data/gold/risk_topic_sample.jsonl`, for Hugo to hand-label
 (instructions in `data/gold/README.md`). **This sample is not yet labeled**,
 so this task has no results in this report.
@@ -55,20 +55,23 @@ agreement. Downloaded directly from the authors' release
 the `datasets` library, whose loader for this dataset depends on a
 loading-script format the library no longer supports.
 
-**License: CC-BY-NC-SA-3.0** (Malo & Sinha) — non-commercial, attribution,
+**License: CC-BY-NC-SA-3.0** (Malo & Sinha): non-commercial, attribution,
 share-alike. Fine for this project; don't redistribute commercially without
 contacting the authors.
 
 ## Confidence methods
 
-- **Jev:** native confidence from `DecisionClient.choice()` — the same
+- **Jev:** native confidence from `DecisionClient.choice()`, the same
   interface Project 1 uses, mirrored (not reimplemented) in
-  `src/harness/models/decision.py`.
+  `src/harness/models/decision.py`. The real `JevDecisionClient`
+  (`src/harness/models/decision_jev.py`) mirrors Project 1's own TypeSafe
+  SDK wrapper and has been smoke-tested with real API calls; a full real
+  run hasn't happened yet (see Limitations).
 - **LLM (Anthropic, `claude-haiku-4-5-20251001` by default):** LLMs don't
   return calibrated probabilities by default, so this harness implements
-  **verbalized confidence** — the model is asked to return
+  **verbalized confidence**: the model is asked to return
   `{"label": ..., "confidence": <0-100>}` as strict JSON, and the confidence
-  is rescaled to 0–1. See `LLMClient.classify()`.
+  is rescaled to 0-1. See `LLMClient.classify()`.
 
 **Limitation:** a verbalized confidence is not the same as a calibrated
 probability. The model is self-reporting a number; it was never trained
@@ -76,11 +79,11 @@ against a proper scoring rule to make that number meaningful. ECE and AUROC
 below measure whether it *happens* to track correctness, not whether the
 model has any real insight into its own reliability.
 
-## Results (mock run only — see caveat above)
+## Results (mock run only, see caveat above)
 
 Both the mock Jev client (`src/harness/models/decision.py`) and the mock LLM
 client (`src/harness/models/llm_client.py`) return a **constant** confidence
-regardless of input (0.6 and 0.7 respectively) — deliberately, so tests are
+regardless of input (0.6 and 0.7 respectively), deliberately, so tests are
 deterministic. That has a direct consequence for every number below: a
 constant confidence carries no information, so ECE, AUROC, and the
 threshold bands are measuring that fact, not a real model property.
@@ -94,7 +97,7 @@ threshold bands are measuring that fact, not a real model property.
 | llm-mock | tune  | 1585 | 0.338    | 0.362 | 0.500 | 0.333               | 0.333               |
 | llm-mock | test  | 679  | 0.333    | 0.367 | 0.500 | 0.341               | 0.342               |
 
-Accuracy sits at ~1/3 on a 3-class task — expected, since both mocks pick a
+Accuracy sits at ~1/3 on a 3-class task, expected, since both mocks pick a
 label via a hash of the input text, uncorrelated with the true label.
 AUROC of exactly 0.500 is the mathematical signature of a constant
 confidence score: with no variation to rank examples by, ROC-AUC reduces to
@@ -103,7 +106,7 @@ chance. Reliability-diagram PNGs for every (model, split) pair are in
 
 **Accuracy-at-coverage vs. accuracy** is a useful sanity check even on mock
 data: accuracy among the "most confident" 80%/90% barely differs from plain
-accuracy, because — again — there's no real confidence signal to rank by.
+accuracy, because, again, there's no real confidence signal to rank by.
 On real data, a well-calibrated model should show accuracy *rising* as
 coverage shrinks.
 
@@ -116,12 +119,12 @@ target error rate 0.1), applied unchanged to test:
 | jev-mock | 0.6     | 0.6      |
 | llm-mock | 0.7     | 0.7      |
 
-`tau_low == tau_high` for both models — again the constant-confidence
-artifact: with only one observed confidence value, there's nothing to carve
+`tau_low == tau_high` for both models: again the constant-confidence
+artifact, with only one observed confidence value, there's nothing to carve
 into separate "reject" / "trust" bands. `exports/thresholds_report.json` has
 the full tune-vs-test comparison; with these degenerate thresholds, coverage
 is 1.0 and accuracy is unchanged between tune and test for both models (no
-OOD comparison exists yet — the 10-K task is the one with an OOD split, and
+OOD comparison exists yet: the 10-K task is the one with an OOD split, and
 it has no gold labels).
 
 ## OOD findings
@@ -129,23 +132,25 @@ it has no gold labels).
 **None yet.** The confirmed OOD design (hold out tickers PFE and V entirely
 from `risk_topic`'s tune/test) only applies to the 10-K task, which has no
 gold labels. The sentiment task has no natural grouping to define an OOD
-split on (Financial PhraseBank carries no company/sector/date metadata) —
+split on (Financial PhraseBank carries no company/sector/date metadata),
 documented as a limitation, not an oversight, when Hugo confirmed this in
 Phase 1.
 
 ## Limitations
 
-- **No real model results.** Every number above comes from deterministic
-  mocks with constant confidence. Real Jev and real Anthropic calls need:
-  (1) `data/gold/risk_topic_sample.jsonl` hand-labeled (131 rows, see
-  `data/gold/README.md`), and (2) a `.env` with real API keys (see
-  `.env.example`). The real `JevDecisionClient` also isn't wired up yet —
-  Phase 0 scoped only the mock; wiring the real client mirrors Project 1's
-  TypeSafe SDK pattern in `report_qa/decision_jev.py`.
+- **No real model results yet.** Every number above comes from deterministic
+  mocks with constant confidence. The real `JevDecisionClient` is wired up
+  and smoke-tested (`src/harness/models/decision_jev.py`, mirroring Project
+  1's `report_qa/decision_jev.py`); two real calls returned sensible,
+  varying confidence. What's still needed for a full real run: (1)
+  `data/gold/risk_topic_sample.jsonl` hand-labeled (131 rows, see
+  `data/gold/README.md`), and (2) rewiring `scripts/run_models.py` to use
+  the real clients instead of the hardcoded mocks, plus explicit go-ahead
+  since real calls cost money.
 - **Verbalized confidence, not calibrated probability** (see Confidence
-  methods above) — a documented limitation of the one confidence method
+  methods above): a documented limitation of the one confidence method
   implemented for the LLM, not a bug.
-- **No true OOD split for the sentiment task** — Financial PhraseBank has no
+- **No true OOD split for the sentiment task.** Financial PhraseBank has no
   grouping metadata to hold out.
 - **131-row gold sample for the 10-K task.** Small by construction (MVP
   timebox); per-topic counts will be uneven since some topics are rarer in
@@ -155,8 +160,8 @@ Phase 1.
 
 ## How to reproduce
 
-The prediction cache (`runs/cache/predictions.jsonl`) is **not** committed —
-reproducing means rerunning the (free, deterministic, seeded) mock clients,
+The prediction cache (`runs/cache/predictions.jsonl`) is **not** committed.
+Reproducing means rerunning the (free, deterministic, seeded) mock clients,
 not pulling a cached artifact. This will need revisiting once real API
 calls are in the mix, since rerunning those on every clone would cost money.
 
@@ -169,4 +174,4 @@ uv run scripts/export_thresholds.py   # writes exports/thresholds.json + report
 ```
 
 Same seed (`seed: int = 0` in `src/harness/config.py`), same deterministic
-mocks → identical tables every time, under a new `run_id`.
+mocks, identical tables every time, under a new `run_id`.

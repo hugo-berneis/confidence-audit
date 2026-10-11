@@ -8,9 +8,8 @@ sentence-transformers, streamlit, psycopg transitively; none of that is
 needed here). If Project 1's interface changes, update this file to match
 and note it in CLAUDE.md's decisions log -- there is no automatic sync.
 
-The real `JevDecisionClient` is intentionally not vendored: Phase 0 only
-needs the mock. Wire in the real client in Phase 2 if Jev's results are
-in scope, using the same TypeSafe SDK pattern as Project 1.
+The real `JevDecisionClient` (`decision_jev.py`) mirrors Project 1's own
+TypeSafe SDK wrapper; `get_decision_client()` returns it when a key is set.
 """
 
 from __future__ import annotations
@@ -113,14 +112,12 @@ class MockDecisionClient:
         return answers
 
 
-def get_decision_client(jev_api_key: str) -> DecisionClient:
-    """Real Jev if `jev_api_key` is set, otherwise the deterministic mock.
-
-    Real-client wiring isn't implemented yet (Phase 0 scope is the mock) --
-    calling this with a key raises until Phase 2 adds it.
-    """
+def get_decision_client(
+    jev_api_key: str, jev_base_url: str = "", jev_model: str = ""
+) -> DecisionClient:
+    """Real Jev if `jev_api_key` is set, otherwise the deterministic mock."""
     if jev_api_key:
-        raise NotImplementedError(
-            "Real JevDecisionClient isn't wired in yet. Phase 0 scope is the mock only."
-        )
+        from harness.models.decision_jev import JevDecisionClient
+
+        return JevDecisionClient(api_key=jev_api_key, base_url=jev_base_url, model=jev_model)
     return MockDecisionClient()

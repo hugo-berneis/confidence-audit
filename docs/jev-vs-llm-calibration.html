@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Jev vs. LLM: Confidence Calibration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #084f6a;      /* Jev */
+    --ocean: #0b76a0;     /* LLM */
+    --amber: #c98a3e;     /* caution / mock-data flag */
+    --gray-bg: #e8e8e8;
+    --gray-light: #f4f5f6;
+    --text: #1f2a30;
+    --muted: #6c7a82;
+  }
+  @page { size: 11in 8.5in; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 11in;
+    font-family: "Open Sans", Arial, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, .num { font-family: "Montserrat", Arial, sans-serif; }
+
+  .page {
+    width: 11in;
+    height: 8.5in;
+    padding: 0.45in 0.55in 0.35in 0.55in;
+    display: flex;
+    flex-direction: column;
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* ---------- Header ---------- */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 3px solid var(--navy);
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+  .header-left .eyebrow {
+    font-size: 9.5px;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    color: var(--ocean);
+    font-weight: 700;
+    margin-bottom: 4px;
+    font-family: "Montserrat", Arial, sans-serif;
+  }
+  .header-left h1 {
+    font-size: 25px;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -0.3px;
+    color: var(--navy);
+  }
+  .header-right {
+    text-align: right;
+    font-size: 9.5px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .header-right strong { color: var(--text); }
+
+  /* ---------- Mock-data banner ---------- */
+  .banner {
+    background: #fbf1e3;
+    border: 1px solid var(--amber);
+    border-radius: 8px;
+    padding: 9px 15px;
+    font-size: 10px;
+    color: #6b4a1e;
+    margin-bottom: 16px;
+  }
+  .banner strong { color: var(--amber); text-transform: uppercase; letter-spacing: 0.6px; }
+
+  /* ---------- Legend / key ---------- */
+  .legend {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .legend-item {
+    flex: 1;
+    border-radius: 8px;
+    padding: 11px 15px;
+    color: #fff;
+  }
+  .legend-item .name { font-size: 13.5px; font-weight: 700; font-family: "Montserrat", Arial, sans-serif; }
+  .legend-item .desc { font-size: 9.5px; opacity: 0.94; margin-top: 3px; }
+  .legend-jev { background: var(--navy); }
+  .legend-llm { background: var(--ocean); }
+
+  /* ---------- Chart panels ---------- */
+  .panels { display: flex; gap: 18px; flex: 1; min-height: 0; }
+  .panel {
+    flex: 1;
+    background: var(--gray-light);
+    border: 1px solid #dde1e4;
+    border-radius: 10px;
+    padding: 16px 18px 12px 18px;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel h2 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--navy);
+    margin: 0 0 4px 0;
+    letter-spacing: -0.1px;
+  }
+  .panel .panel-sub {
+    font-size: 8.8px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .chart-rows {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+  }
+  .chart-row { margin-bottom: 14px; }
+  .chart-row:last-child { margin-bottom: 0; }
+  .chart-row .dim-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .bar-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 3px;
+  }
+  .bar-tag {
+    width: 38px;
+    font-size: 8px;
+    font-weight: 700;
+    color: var(--muted);
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .bar-track {
+    display: block;
+    flex: 1;
+    background: #e2e5e8;
+    border-radius: 3px;
+    height: 11px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+  }
+  .bar-fill.jev { background: var(--navy); }
+  .bar-fill.llm { background: var(--ocean); }
+  .bar-num {
+    width: 38px;
+    font-size: 8.3px;
+    font-weight: 700;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .scale-note {
+    font-size: 8px;
+    color: var(--muted);
+    margin-top: auto;
+    padding-top: 10px;
+    font-style: italic;
+  }
+
+  .footer {
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #e3e5e9;
+    font-size: 8px;
+    color: #9aa0a8;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* ---------- Page 2: pros / cons ---------- */
+  .pc-page-header { margin-bottom: 18px; }
+  .pc-page-header .eyebrow {
+    font-size: 9.5px;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    color: var(--ocean);
+    font-weight: 700;
+    margin-bottom: 4px;
+    font-family: "Montserrat", Arial, sans-serif;
+  }
+  .pc-page-header h1 {
+    font-size: 22px;
+    font-weight: 800;
+    margin: 0;
+    color: var(--navy);
+  }
+
+  .proscons {
+    display: flex;
+    gap: 22px;
+    flex: 1;
+    min-height: 0;
+  }
+  .pc-card {
+    flex: 1;
+    background: var(--gray-light);
+    border: 1px solid #dde1e4;
+    border-top: 5px solid var(--navy);
+    border-radius: 10px;
+    padding: 20px 24px 22px 24px;
+    display: flex;
+    flex-direction: column;
+  }
+  .pc-card.llm { border-top-color: var(--ocean); }
+  .pc-card h3 {
+    font-size: 17px;
+    margin: 0 0 2px 0;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .pc-card .pc-example {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+  .pc-cols { display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 0; }
+  .pc-col { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .pc-col.pro { padding-bottom: 16px; border-bottom: 1px solid #dde1e4; }
+  .pc-label {
+    font-size: 9px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 9px;
+    padding-bottom: 5px;
+    border-bottom: 2px solid;
+  }
+  .pc-label.pro { color: #15795f; border-color: #15795f; }
+  .pc-label.con { color: #a13b3b; border-color: #a13b3b; }
+  .pc-label.neutral { color: var(--muted); border-color: #c7cbd0; }
+  .pc-col ul {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    margin: 0;
+    padding-left: 16px;
+    color: #33363c;
+  }
+  .pc-col.pro ul { font-size: 12px; line-height: 1.55; }
+  .pc-col.con ul { font-size: 10.5px; line-height: 1.5; color: #55585e; }
+  .pc-col li { margin-bottom: 0; }
+
+  .pc-bestfit {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid #dde1e4;
+  }
+  .pc-bestfit .pc-label { margin-bottom: 7px; }
+  .pc-bestfit p {
+    margin: 0;
+    font-size: 10.5px;
+    line-height: 1.55;
+    color: #33363c;
+  }
+
+  /* ---------- Page 3: status / vertical chart ---------- */
+  .why-page-header { margin-bottom: 14px; }
+  .why-page-header .eyebrow {
+    font-size: 9.5px;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    color: var(--ocean);
+    font-weight: 700;
+    margin-bottom: 4px;
+    font-family: "Montserrat", Arial, sans-serif;
+  }
+  .why-page-header h1 {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0;
+    color: var(--navy);
+  }
+  .why-para {
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #2a333a;
+    max-width: 9.3in;
+    margin-bottom: 20px;
+  }
+  .why-para strong { color: var(--navy); }
+  .why-para .flag { color: var(--amber); }
+
+  .vchart-wrap {
+    flex: 1;
+    background: var(--gray-light);
+    border: 1px solid #dde1e4;
+    border-radius: 10px;
+    padding: 22px 36px 18px 36px;
+    display: flex;
+    flex-direction: column;
+  }
+  .vchart-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 2px;
+  }
+  .vchart-sub {
+    font-size: 9.5px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .vbar-chart {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-evenly;
+    padding-bottom: 0;
+  }
+  .vbar-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .vbar-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    height: 260px;
+  }
+  .vbar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+  }
+  .vbar {
+    position: relative;
+    width: 56px;
+    border-radius: 5px 5px 2px 2px;
+  }
+  .vbar.jev { background: var(--navy); }
+  .vbar.llm { background: var(--ocean); }
+  .vbar-val {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .vbar-tag {
+    margin-top: 6px;
+    font-size: 8.5px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .vbar-baseline {
+    width: 100%;
+    height: 2px;
+    background: #c7cbd0;
+    margin-top: 0;
+  }
+  .vbar-group-label {
+    margin-top: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text);
+    text-align: center;
+    max-width: 170px;
+  }
+  .vchart-note {
+    font-size: 8px;
+    color: var(--muted);
+    font-style: italic;
+    margin-top: 14px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ========== PAGE 1: Visual comparison ========== -->
+  <div class="page">
+    <div class="header">
+      <div class="header-left">
+        <div class="eyebrow">Confidence calibration reference</div>
+        <h1>Jev vs. LLM: Confidence Calibration</h1>
+      </div>
+      <div class="header-right">
+        Built for <strong>confidence-audit</strong>, a finance calibration harness<br>
+        Jev (TypeSafe) vs. Claude Haiku 4.5, verbalized confidence
+      </div>
+    </div>
+
+    <div class="banner">
+      <strong>Mock data:</strong> every number on this page comes from this repo's deterministic mock
+      clients, which return a <em>constant</em> confidence by design. It validates the measurement
+      pipeline end to end. It is not yet a finding about real Jev or real Claude. See page 3.
+    </div>
+
+    <div class="legend">
+      <div class="legend-item legend-jev">
+        <div class="name">Jev (TypeSafe System One)</div>
+        <div class="desc">Native confidence from DecisionClient.choice(): a bounded pick from a fixed option list</div>
+      </div>
+      <div class="legend-item legend-llm">
+        <div class="name">LLM: Claude Haiku 4.5</div>
+        <div class="desc">Verbalized confidence: asked to self-report a 0&ndash;100 confidence alongside its label</div>
+      </div>
+    </div>
+
+    <div class="panels">
+      <div class="panel">
+        <h2>Accuracy &amp; coverage</h2>
+        <div class="panel-sub">financial_sentiment, test split, n=679 (runs/20261004T200426Z/metrics.json)</div>
+        <div class="chart-rows">
+    <div class="chart-row">
+      <div class="dim-label">Accuracy</div>
+      <div class="bar-line"><span class="bar-tag">Jev</span><span class="bar-track"><span class="bar-fill jev" style="width:32.5%"></span></span><span class="bar-num">0.325</span></div>
+      <div class="bar-line"><span class="bar-tag">LLM</span><span class="bar-track"><span class="bar-fill llm" style="width:33.3%"></span></span><span class="bar-num">0.333</span></div>
+    </div>
+    <div class="chart-row">
+      <div class="dim-label">Accuracy at 80% coverage</div>
+      <div class="bar-line"><span class="bar-tag">Jev</span><span class="bar-track"><span class="bar-fill jev" style="width:31.7%"></span></span><span class="bar-num">0.317</span></div>
+      <div class="bar-line"><span class="bar-tag">LLM</span><span class="bar-track"><span class="bar-fill llm" style="width:34.1%"></span></span><span class="bar-num">0.341</span></div>
+    </div>
+    <div class="chart-row">
+      <div class="dim-label">Accuracy at 90% coverage</div>
+      <div class="bar-line"><span class="bar-tag">Jev</span><span class="bar-track"><span class="bar-fill jev" style="width:33.4%"></span></span><span class="bar-num">0.334</span></div>
+      <div class="bar-line"><span class="bar-tag">LLM</span><span class="bar-track"><span class="bar-fill llm" style="width:34.2%"></span></span><span class="bar-num">0.342</span></div>
+    </div>
+        </div>
+        <div class="scale-note">All three near 1/3, expected on a 3-class task when predictions are an input-hash, uncorrelated with the true label.</div>
+      </div>
+      <div class="panel">
+        <h2>Calibration &amp; discrimination</h2>
+        <div class="panel-sub">Same split. ECE: lower is better. AUROC: 0.5 = no discrimination, 1.0 = perfect.</div>
+        <div class="chart-rows">
+    <div class="chart-row">
+      <div class="dim-label">Expected Calibration Error (lower is better)</div>
+      <div class="bar-line"><span class="bar-tag">Jev</span><span class="bar-track"><span class="bar-fill jev" style="width:27.5%"></span></span><span class="bar-num">0.275</span></div>
+      <div class="bar-line"><span class="bar-tag">LLM</span><span class="bar-track"><span class="bar-fill llm" style="width:36.7%"></span></span><span class="bar-num">0.367</span></div>
+    </div>
+    <div class="chart-row">
+      <div class="dim-label">AUROC (confidence vs. correctness)</div>
+      <div class="bar-line"><span class="bar-tag">Jev</span><span class="bar-track"><span class="bar-fill jev" style="width:50%"></span></span><span class="bar-num">0.500</span></div>
+      <div class="bar-line"><span class="bar-tag">LLM</span><span class="bar-track"><span class="bar-fill llm" style="width:50%"></span></span><span class="bar-num">0.500</span></div>
+    </div>
+        </div>
+        <div class="scale-note">AUROC = 0.500 for both is the mathematical signature of a constant confidence score: there's nothing to rank by yet.</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Source: confidence-audit (this repo), scripts/evaluate.py, runs/20261004T200426Z/metrics.json. Mock Jev + mock LLM clients, fixed seed, deterministic.</span>
+      <span>confidence-audit &middot; docs/jev-vs-llm-calibration.pdf &middot; page 1 of 3</span>
+    </div>
+  </div>
+
+  <!-- ========== PAGE 2: Pros / cons ========== -->
+  <div class="page">
+    <div class="pc-page-header">
+      <div class="eyebrow">Confidence calibration reference</div>
+      <h1>Pros &amp; Cons by Approach</h1>
+    </div>
+
+    <div class="proscons">
+      <div class="pc-card jev">
+        <h3>Jev</h3>
+        <div class="pc-example">TypeSafe System One (src/harness/models/decision_jev.py)</div>
+        <div class="pc-cols">
+          <div class="pc-col pro">
+            <div class="pc-label pro">Pros</div>
+            <ul>
+              <li>Returns a confidence natively with every decision, no prompting required</li>
+              <li>Structurally bounded to the given option list; can never answer outside it</li>
+              <li>Fast: a single real smoke-test call returned in ~0.2s</li>
+              <li>Already used in Project 1 to gate retrieval and answer display</li>
+            </ul>
+          </div>
+          <div class="pc-col con">
+            <div class="pc-label con">Cons</div>
+            <ul>
+              <li>Weak at numbers, counting, and literal detail by design (Project 1's own finding)</li>
+              <li>Only bounded judgments, no open-ended writing</li>
+              <li>Real calibration on this harness's tasks is still unmeasured end to end</li>
+            </ul>
+          </div>
+        </div>
+        <div class="pc-bestfit">
+          <div class="pc-label neutral">Best fit</div>
+          <p>High-volume bounded decisions already embedded in app logic: the risk-topic tagging,
+          relevance filtering, and groundedness gates Project 1 already runs on every paragraph.</p>
+        </div>
+      </div>
+
+      <div class="pc-card llm">
+        <h3>LLM (Claude Haiku 4.5)</h3>
+        <div class="pc-example">Verbalized confidence (src/harness/models/llm_client.py)</div>
+        <div class="pc-cols">
+          <div class="pc-col pro">
+            <div class="pc-label pro">Pros</div>
+            <ul>
+              <li>Flexible: the same client answers any classification task via prompting</li>
+              <li>Can be prompted to justify an answer, not just emit a bare label</li>
+              <li>No fixed option-list infrastructure needed to stand up a new task</li>
+            </ul>
+          </div>
+          <div class="pc-col con">
+            <div class="pc-label con">Cons</div>
+            <ul>
+              <li>Confidence is self-reported, not trained against a scoring rule: not the
+              same thing as a calibrated probability (documented limitation, see REPORT.md)</li>
+              <li>Slower and costlier per call than Jev at volume</li>
+              <li>Needs a parser for its JSON output; a malformed response is a retryable failure</li>
+            </ul>
+          </div>
+        </div>
+        <div class="pc-bestfit">
+          <div class="pc-label neutral">Best fit</div>
+          <p>Tasks where a fixed option list doesn't fit, or as an independent second opinion to
+          sanity-check Jev's decisions on the same input.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Sources: this repo's src/harness/models/{decision_jev,llm_client}.py and REPORT.md's Limitations section.</span>
+      <span>confidence-audit &middot; docs/jev-vs-llm-calibration.pdf &middot; page 2 of 3</span>
+    </div>
+  </div>
+
+  <!-- ========== PAGE 3: Status ========== -->
+  <div class="page">
+    <div class="why-page-header">
+      <div class="eyebrow">Confidence calibration reference</div>
+      <h1>Status: Mock-Validated, Real Results Pending</h1>
+    </div>
+
+    <div class="why-para">
+      <p>The pipeline runs end to end and the numbers below are <strong>real output from this repo</strong>,
+      but both clients return a <strong>constant</strong> confidence by design (0.6 for the mock Jev,
+      0.7 for the mock LLM), so <span class="flag">nothing here is a real calibration finding yet</span>.
+      AUROC lands on exactly 0.500 for both: the mathematical signature of a score with no variation to rank
+      by. The real <strong>JevDecisionClient</strong> is already wired up and smoke-tested: a single
+      real call against each task returned a sensible, varying answer in well under a second, so what
+      remains is a full real run, plus hand-labeling the 10-K gold sample before that task has any gold
+      labels at all.</p>
+    </div>
+
+    <div class="vchart-wrap">
+      <div class="vchart-title">Where the two clients land today</div>
+      <div class="vchart-sub">Same financial_sentiment test-split numbers as page 1, reproduced as a vertical comparison</div>
+
+      <div class="vbar-chart">
+        <div class="vbar-group">
+          <div class="vbar-bars">
+            <div class="vbar-col">
+              <div class="vbar jev" style="height:214px"><span class="vbar-val">0.325</span></div>
+              <div class="vbar-tag">Jev</div>
+            </div>
+            <div class="vbar-col">
+              <div class="vbar llm" style="height:219px"><span class="vbar-val">0.333</span></div>
+              <div class="vbar-tag">LLM</div>
+            </div>
+          </div>
+          <div class="vbar-baseline"></div>
+          <div class="vbar-group-label">Accuracy</div>
+        </div>
+
+        <div class="vbar-group">
+          <div class="vbar-bars">
+            <div class="vbar-col">
+              <div class="vbar jev" style="height:181px"><span class="vbar-val">0.275</span></div>
+              <div class="vbar-tag">Jev</div>
+            </div>
+            <div class="vbar-col">
+              <div class="vbar llm" style="height:242px"><span class="vbar-val">0.367</span></div>
+              <div class="vbar-tag">LLM</div>
+            </div>
+          </div>
+          <div class="vbar-baseline"></div>
+          <div class="vbar-group-label">ECE (lower is better)</div>
+        </div>
+
+        <div class="vbar-group">
+          <div class="vbar-bars">
+            <div class="vbar-col">
+              <div class="vbar jev" style="height:260px"><span class="vbar-val">0.500</span></div>
+              <div class="vbar-tag">Jev</div>
+            </div>
+            <div class="vbar-col">
+              <div class="vbar llm" style="height:260px"><span class="vbar-val">0.500</span></div>
+              <div class="vbar-tag">LLM</div>
+            </div>
+          </div>
+          <div class="vbar-baseline"></div>
+          <div class="vbar-group-label">AUROC</div>
+        </div>
+      </div>
+
+      <div class="vchart-note">Bar heights scaled independently per metric for readability (ECE and AUROC are both 0&ndash;1 but not comparable to each other). Mock data, see banner on page 1.</div>
+    </div>
+
+    <div class="footer">
+      <span>Source: confidence-audit (this repo). Next: label data/gold/risk_topic_sample.jsonl, then rerun scripts/run_models.py with real clients.</span>
+      <span>confidence-audit &middot; docs/jev-vs-llm-calibration.pdf &middot; page 3 of 3</span>
+    </div>
+  </div>
+
+</body>
+</html>
