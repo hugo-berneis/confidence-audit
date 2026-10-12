@@ -5,8 +5,8 @@
 A calibration harness for Jev and an LLM: runs both on the same labeled
 finance classification tasks and measures accuracy, calibration (ECE),
 discrimination (AUROC), and accuracy at a target coverage, then exports
-frozen confidence thresholds for [10k-analyst](../10k-analyst) (Project 1)
-and Project 3 to load. See [REPORT.md](REPORT.md) for the full writeup
+frozen confidence thresholds for [10k-analyst](../10k-analyst) repo
+and Fraud Checker to load. See [REPORT.md](REPORT.md) for the full writeup
 (current status: pipeline validated on mocks, real-model results still
 pending).
 
