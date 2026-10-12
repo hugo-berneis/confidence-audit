@@ -1,5 +1,7 @@
 # confidence-audit
 
+[![Jev vs. LLM: Confidence Calibration](docs/jev-vs-llm-calibration-preview.png)](docs/jev-vs-llm-calibration.pdf)
+
 A calibration harness for Jev and an LLM: runs both on the same labeled
 finance classification tasks and measures accuracy, calibration (ECE),
 discrimination (AUROC), and accuracy at a target coverage, then exports
